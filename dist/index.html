@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robo Logic - Portable</title>
+    <!-- Load Levels Data -->
+    <script src="levels.js"></script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        :root {
+            --bg-app: #eef2f5;
+            --bg-panel: rgba(255, 255, 255, 0.7);
+
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --secondary: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+
+            --glass-border: 1px solid rgba(255, 255, 255, 0.5);
+            --glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --glass-backdrop: blur(12px);
+
+            --grid-cell-size: 60px;
+            --grid-gap: 8px;
+
+            --radius-lg: 16px;
+            --radius-md: 8px;
+            --radius-sm: 4px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-app);
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            overflow-y: auto;
+        }
+
+        #root {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: var(--glass-backdrop);
+            -webkit-backdrop-filter: var(--glass-backdrop);
+            border: var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+
+        .flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:active {
+            background: var(--primary-hover);
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:hover {
+            background: #f9fafb;
+            transform: translateY(-1px);
+        }
+
+        .btn-icon:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        const IconChevronUp = ({ size = 24, color = "currentColor", style }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={style}><path d="m18 15-6-6-6 6" /><path d="m6 15 6-6 6 6" style={{ display: 'none' }} /></svg>
+        );
+        const IconArrowUp = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></svg>
+        );
+        const IconCornerUpLeft = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>
+        );
+        const IconCornerUpRight = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 14 20 9 15 4" /><path d="M4 20v-7a4 4 0 0 1 4-4h12" /></svg>
+        );
+        const IconPlay = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+        );
+        const IconSquare = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>
+        );
+        const IconRotateCcw = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12" /><path d="M3 3v9h9" /></svg>
+        );
+        // NEW: Droplet Icon
+        const IconDroplet = ({ size = 24, color = "currentColor", fill = "none" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" />
+            </svg>
+        );
+
+        const IconPause = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="4" width="4" height="16" />
+                <rect x="14" y="4" width="4" height="16" />
+            </svg>
+        );
+
+        const IconTerminal = ({ size = 24, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+        );
+
+        const TILE_TYPES = {
+            VOID: 0,
+            PATH_BLUE: 1, // Default PATH
+            PATH_RED: 2,
+            PATH_GREEN: 3,
+            OBSTACLE: 4,
+            PATH_BLUE_NOSTAR: 5,
+            PATH_RED_NOSTAR: 6,
+            PATH_GREEN_NOSTAR: 7
+        };
+
+        const isPath = (cell) => {
+            return cell === TILE_TYPES.PATH_BLUE ||
+                cell === TILE_TYPES.PATH_RED ||
+                cell === TILE_TYPES.PATH_GREEN;
+        };
+
+        const getTileColor = (cell) => {
+            if (cell === TILE_TYPES.PATH_RED || cell === TILE_TYPES.PATH_RED_NOSTAR) return PAINT_COLORS.RED;
+            if (cell === TILE_TYPES.PATH_GREEN || cell === TILE_TYPES.PATH_GREEN_NOSTAR) return PAINT_COLORS.GREEN;
+            if (cell === TILE_TYPES.PATH_BLUE || cell === TILE_TYPES.PATH_BLUE_NOSTAR) return PAINT_COLORS.BLUE;
+            return null;
+        };
+
+
+
+        const COMMANDS = {
+            FORWARD: 'FORWARD', LEFT: 'LEFT', RIGHT: 'RIGHT',
+            F0: 'F0', F1: 'F1', F2: 'F2',
+            PAINT_RED: 'PAINT_RED', PAINT_BLUE: 'PAINT_BLUE', PAINT_GREEN: 'PAINT_GREEN'
+        };
+
+        const PAINT_COLORS = {
+            RED: '#ef4444',
+            BLUE: '#3b82f6',
+            GREEN: '#10b981'
+        };
+
+        const CONDITIONS = {
+            NONE: null,
+            RED: 'RED',
+            BLUE: 'BLUE',
+            GREEN: 'GREEN'
+        };
+
+        const DIRECTIONS = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
+        const MAX_STEPS = 60;
+
+        function useGameLogic(initialLevels) {
+            const [levelIndex, setLevelIndex] = useState(0);
+            const [level, setLevel] = useState(initialLevels[0]);
+            const [robot, setRobot] = useState({ x: 0, y: 0, dir: 0 });
+
+            const [programs, setPrograms] = useState({ f0: [], f1: [], f2: [] });
+            const [activeEditFunc, setActiveEditFunc] = useState('f0');
+
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [gameStatus, setGameStatus] = useState('IDLE');
+            const [execState, setExecState] = useState({ funcId: 'f0', index: -1, stack: [] });
+            const [speed, setSpeed] = useState(1);
+
+            const [collectedStars, setCollectedStars] = useState([]);
+            const [totalStars, setTotalStars] = useState(0);
+            const [paintedTiles, setPaintedTiles] = useState({});
+
+            const [activeCondition, setActiveCondition] = useState(CONDITIONS.NONE);
+            const [isPaused, setIsPaused] = useState(false);
+
+            const stepCountRef = useRef(0);
+
+            useEffect(() => { loadLevel(levelIndex); }, [levelIndex]);
+
+
+
+
+
+            const loadLevel = (idx) => {
+                const lvl = initialLevels[idx];
+                setLevel(lvl);
+                let startX = lvl.startPos.x;
+                let startY = lvl.startPos.y;
+                let stars = 0;
+                const initialPainted = {};
+
+                lvl.grid.forEach((row, y) => {
+                    row.forEach((cell, x) => {
+                        if (isPath(cell)) {
+                            if (x !== startX || y !== startY) {
+                                stars++;
+                            }
+                        }
+
+                        // Paint tile based on type
+                        const initialColor = getTileColor(cell);
+                        if (initialColor) {
+                            initialPainted[`${x},${y}`] = initialColor;
+                        }
+                    });
+                });
+                setRobot({ x: startX, y: startY, dir: lvl.startDir });
+                setPrograms({ f0: [], f1: [], f2: [] });
+                setGameStatus('IDLE');
+                setIsPlaying(false);
+                setExecState({ funcId: 'f0', index: -1, stack: [] });
+                setActiveEditFunc('f0');
+                setCollectedStars([]);
+                setTotalStars(stars);
+
+                setPaintedTiles(initialPainted);
+
+                setActiveCondition(CONDITIONS.NONE);
+                setIsPaused(false);
+            };
+
+            const resetGame = () => {
+                setIsPlaying(false);
+                setIsPaused(false);
+                setGameStatus('IDLE');
+                setExecState({ funcId: 'f0', index: -1, stack: [] });
+                setCollectedStars([]);
+
+                let startX = level.startPos.x;
+                let startY = level.startPos.y;
+                const initialPainted = {};
+
+                level.grid.forEach((row, y) => {
+                    row.forEach((cell, x) => {
+                        // Paint tile based on type
+                        const initialColor = getTileColor(cell);
+                        if (initialColor) {
+                            initialPainted[`${x},${y}`] = initialColor;
+                        }
+                    });
+                });
+
+                setRobot({ x: startX, y: startY, dir: level.startDir });
+                setPaintedTiles(initialPainted);
+            };
+
+            const addCommand = (cmdType) => {
+                if (gameStatus !== 'IDLE') return;
+                const config = level.configs[activeEditFunc];
+                if (!config) return;
+                const currentList = programs[activeEditFunc];
+
+                if (currentList.length < config.limit) {
+                    const cmdObj = {
+                        type: cmdType,
+                        cond: activeCondition
+                    };
+                    setPrograms({ ...programs, [activeEditFunc]: [...currentList, cmdObj] });
+                }
+            };
+
+            const removeCommand = (funcId, index) => {
+                if (gameStatus !== 'IDLE') return;
+                const currentList = programs[funcId];
+                const newList = [...currentList];
+                newList.splice(index, 1);
+                setPrograms({ ...programs, [funcId]: newList });
+            };
+
+            const runProgram = () => {
+                if (programs.f0.length === 0) return;
+                if (gameStatus === 'WON') { resetGame(); return; }
+                setIsPlaying(true);
+                setIsPaused(false);
+                setGameStatus('RUNNING');
+                stepCountRef.current = 0;
+                setExecState({ funcId: 'f0', index: -1, stack: [] });
+                setCollectedStars([]);
+
+                const initialPainted = {};
+                level.grid.forEach((row, y) => {
+                    row.forEach((cell, x) => {
+                        // Paint tile based on type
+                        const initialColor = getTileColor(cell);
+                        if (initialColor) {
+                            initialPainted[`${x},${y}`] = initialColor;
+                        }
+                    });
+                });
+                setPaintedTiles(initialPainted);
+            };
+
+            useEffect(() => {
+                if (!isPlaying || isPaused || gameStatus !== 'RUNNING') return;
+                const tick = setTimeout(() => { step(); }, 500 / speed);
+                return () => clearTimeout(tick);
+            }, [isPlaying, isPaused, robot, execState, gameStatus, speed]);
+
+            const step = useCallback(() => {
+                let { funcId, index, stack } = execState;
+                let nextIndex = index + 1;
+                const currentProg = programs[funcId];
+
+                if (nextIndex >= currentProg.length) {
+                    if (stack.length > 0) {
+                        const returnState = stack[stack.length - 1];
+                        setExecState({
+                            funcId: returnState.funcId,
+                            index: returnState.index,
+                            stack: stack.slice(0, -1)
+                        });
+                        return;
+                    } else {
+                        setIsPlaying(false);
+                        setGameStatus('LOST');
+                        return;
+                    }
+                }
+
+                stepCountRef.current += 1;
+                if (stepCountRef.current > MAX_STEPS) {
+                    setIsPlaying(false);
+                    setGameStatus('LOST');
+                    return;
+                }
+
+                const cmdObj = currentProg[nextIndex];
+                const cmd = cmdObj.type;
+                const cond = cmdObj.cond;
+
+                // CHECK CONDITION
+                let conditionMet = true;
+                if (cond) {
+                    const currentTileColor = paintedTiles[`${robot.x},${robot.y}`];
+                    const requiredColor = PAINT_COLORS[cond];
+                    if (currentTileColor !== requiredColor) {
+                        conditionMet = false;
+                    }
+                }
+
+                let newRobot = { ...robot };
+                let newCollected = [...collectedStars];
+                let newPainted = { ...paintedTiles };
+                let didCall = false;
+
+                if (!conditionMet) {
+                    setExecState({ ...execState, index: nextIndex });
+                    return;
+                }
+
+                switch (cmd) {
+                    case COMMANDS.FORWARD:
+                        const normalizedDir = ((newRobot.dir % 4) + 4) % 4;
+                        const d = DIRECTIONS[normalizedDir];
+                        const nx = newRobot.x + d.x;
+                        const ny = newRobot.y + d.y;
+                        if (ny >= 0 && ny < level.grid.length && nx >= 0 && nx < level.grid[0].length &&
+                            level.grid[ny][nx] !== TILE_TYPES.VOID && level.grid[ny][nx] !== TILE_TYPES.OBSTACLE) {
+                            newRobot.x = nx; newRobot.y = ny;
+
+                            const cell = level.grid[ny][nx];
+                            if (isPath(cell)) {
+                                const isStartPos = (nx === level.startPos.x && ny === level.startPos.y);
+                                if (!isStartPos) {
+                                    const key = `${nx},${ny}`;
+                                    if (!newCollected.includes(key)) {
+                                        newCollected.push(key);
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    case COMMANDS.LEFT: newRobot.dir -= 1; break;
+                    case COMMANDS.RIGHT: newRobot.dir += 1; break;
+
+                    case COMMANDS.PAINT_RED: newPainted[`${newRobot.x},${newRobot.y}`] = PAINT_COLORS.RED; break;
+                    case COMMANDS.PAINT_BLUE: newPainted[`${newRobot.x},${newRobot.y}`] = PAINT_COLORS.BLUE; break;
+                    case COMMANDS.PAINT_GREEN: newPainted[`${newRobot.x},${newRobot.y}`] = PAINT_COLORS.GREEN; break;
+
+                    case COMMANDS.F0:
+                    case COMMANDS.F1:
+                    case COMMANDS.F2:
+                        const targetFunc = cmd === COMMANDS.F0 ? 'f0' : (cmd === COMMANDS.F1 ? 'f1' : 'f2');
+                        if (level.configs[targetFunc]) {
+                            setExecState({
+                                funcId: targetFunc,
+                                index: -1,
+                                stack: [...stack, { funcId, index: nextIndex }]
+                            });
+                            didCall = true;
+                        }
+                        break;
+                }
+
+                if (!didCall) {
+                    setRobot(newRobot);
+                    setCollectedStars(newCollected);
+                    setPaintedTiles(newPainted);
+                    setExecState({ ...execState, index: nextIndex });
+
+                    if (newCollected.length === totalStars && totalStars > 0) {
+                        setGameStatus('WON');
+                        setIsPlaying(false);
+                    }
+                }
+            }, [execState, programs, robot, level, gameStatus, collectedStars, totalStars, paintedTiles]);
+
+            const nextLevel = () => {
+                if (levelIndex < initialLevels.length - 1) setLevelIndex(prev => prev + 1);
+                else setLevelIndex(0);
+            };
+
+            const togglePause = () => setIsPaused(prev => !prev);
+
+            const toggleSpeed = () => {
+                setSpeed(prev => {
+                    if (prev === 1) return 2;
+                    if (prev === 2) return 4;
+                    if (prev === 4) return 0.5;
+                    return 1;
+                });
+            };
+
+            return {
+                level, robot, programs, isPlaying, isPaused, gameStatus, execState, activeEditFunc, setActiveEditFunc,
+                collectedStars, paintedTiles, activeCondition, setActiveCondition,
+                addCommand, removeCommand, runProgram, resetGame, nextLevel, togglePause,
+                speed, toggleSpeed
+            };
+        }
+
+        const TILE_COLORS = {
+            [TILE_TYPES.VOID]: 'transparent',
+            [TILE_TYPES.PATH_BLUE]: 'var(--primary)',
+            [TILE_TYPES.OBSTACLE]: '#9ca3af',
+            [TILE_TYPES.PATH_RED]: '#ef4444',
+            [TILE_TYPES.PATH_GREEN]: '#10b981',
+            [TILE_TYPES.PATH_BLUE_NOSTAR]: 'var(--primary)',
+            [TILE_TYPES.PATH_RED_NOSTAR]: '#ef4444',
+            [TILE_TYPES.PATH_GREEN_NOSTAR]: '#10b981'
+        };
+
+        const Board = ({ level, robot, collectedStars, paintedTiles }) => {
+            const rows = level.grid.length;
+            const cols = level.grid[0].length;
+            return (
+                <div className="glass-panel" style={{ position: 'relative' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, var(--grid-cell-size))`, gridTemplateRows: `repeat(${rows}, var(--grid-cell-size))`, gridGap: 'var(--grid-gap)' }}>
+                        {level.grid.map((row, y) => row.map((cell, x) => {
+                            const isStarTile = isPath(cell);
+                            const isCollected = collectedStars.includes(`${x},${y}`);
+                            const isBackground = cell === TILE_TYPES.VOID;
+                            const paintedColor = paintedTiles[`${x},${y}`];
+                            const baseColor = TILE_COLORS[cell] || TILE_COLORS[TILE_TYPES.PATH_BLUE]; // Fallback
+                            const finalColor = paintedColor || baseColor;
+
+                            return (
+                                <div key={`${x}-${y}`} className="flex-center" style={{
+                                    backgroundColor: finalColor, borderRadius: '8px',
+                                    opacity: isBackground ? 0.05 : 1,
+                                    boxShadow: !isBackground ? 'inset 0 -4px 0 rgba(0,0,0,0.2)' : 'none',
+                                    color: 'white', fontWeight: 'bold', fontSize: '1.2rem',
+                                    transition: 'background-color 0.3s ease'
+                                }}>
+                                    {isStarTile && !isCollected && !(x === level.startPos.x && y === level.startPos.y) && '★'}
+                                </div>
+                            );
+                        }))}
+                    </div>
+                    {/* ... robot container ... */}
+                    <div style={{
+                        position: 'absolute', top: '24px', left: '24px',
+                        width: 'var(--grid-cell-size)', height: 'var(--grid-cell-size)',
+                        transform: `translate(${robot.x * 68}px, ${robot.y * 68}px)`,
+                        transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        <div style={{
+                            width: '100%', height: '100%',
+                            borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transform: `rotate(${robot.dir * 90}deg)`, transition: 'transform 0.4s ease-in-out', zIndex: 10
+                        }}>
+                            {/* Robot content */}
+                            <div style={{
+                                width: '60%', height: '60%', background: 'white', borderRadius: '50%',
+                                boxShadow: '0 4px 6px rgba(0,0,0,0.2)', position: 'relative'
+                            }}>
+                                <div style={{
+                                    position: 'absolute', top: '20%', left: '50%', transform: 'translate(-50%, 0)',
+                                    width: '12px', height: '12px', background: '#374151', borderRadius: '50%'
+                                }} />
+                            </div>
+                        </div>
+                    </div>
+                </div >
+            );
+        };
+
+        const Controls = ({ levelConfigs, programs, execState, activeEditFunc, setActiveEditFunc, onAddCommand, onRemoveCommand, onPlay, onReset, isPlaying, isPaused, onPause, activeCondition, setActiveCondition, speed, onToggleSpeed }) => {
+            const getIcon = (cmd, colorOverride) => {
+                const props = { size: 24, ...(colorOverride ? { color: colorOverride } : {}) };
+                switch (cmd) {
+                    case COMMANDS.FORWARD: return <IconArrowUp {...props} />;
+                    case COMMANDS.LEFT: return <IconCornerUpLeft {...props} />;
+                    case COMMANDS.RIGHT: return <IconCornerUpRight {...props} />;
+                    case COMMANDS.F0: return <span style={{ fontWeight: 900, fontSize: '1.2rem', color: colorOverride || 'inherit' }}>f0</span>;
+                    case COMMANDS.F1: return <span style={{ fontWeight: 900, fontSize: '1.2rem', color: colorOverride || 'inherit' }}>f1</span>;
+                    case COMMANDS.F2: return <span style={{ fontWeight: 900, fontSize: '1.2rem', color: colorOverride || 'inherit' }}>f2</span>;
+                    case COMMANDS.PAINT_RED: return <IconDroplet size={24} fill={colorOverride || PAINT_COLORS.RED} color={colorOverride || PAINT_COLORS.RED} />;
+                    case COMMANDS.PAINT_BLUE: return <IconDroplet size={24} fill={colorOverride || PAINT_COLORS.BLUE} color={colorOverride || PAINT_COLORS.BLUE} />;
+                    case COMMANDS.PAINT_GREEN: return <IconDroplet size={24} fill={colorOverride || PAINT_COLORS.GREEN} color={colorOverride || PAINT_COLORS.GREEN} />;
+                    default: return null;
+                }
+            };
+
+            const getCmdColor = (cmd) => {
+                return '#e5e7eb'; // All neutral
+            };
+
+            const renderRow = (funcId, label, color) => {
+                const config = levelConfigs[funcId];
+                if (!config) return null;
+                const list = programs[funcId];
+
+                // When playing, nothing is visually "editing".
+                const isEditing = !isPlaying && activeEditFunc === funcId;
+
+                return (
+                    <div style={{ marginBottom: '16px', opacity: (isPlaying && execState.funcId !== funcId) ? 0.4 : 1, transition: 'opacity 0.3s' }}>
+                        <div onClick={() => !isPlaying && setActiveEditFunc(funcId)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: isPlaying ? 'default' : 'pointer', color: isEditing ? color : 'var(--text-muted)' }}>
+                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: isEditing ? color : '#d1d5db', boxShadow: isEditing ? `0 0 8px ${color}` : 'none' }} />
+                            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{label}</span>
+                            <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>{list.length} / {config.limit}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                            {Array.from({ length: config.limit }).map((_, i) => {
+                                const cmdObj = list[i];
+                                const cmdType = cmdObj ? cmdObj.type : null;
+                                const cond = cmdObj ? cmdObj.cond : null;
+
+                                // No execution highlight in slots as requested
+                                // const isExecuting = isPlaying && execState.funcId === funcId && execState.index === i;
+
+                                let borderColor = isEditing ? color : '#e5e7eb';
+                                let borderWidth = isEditing ? '2px' : '1px';
+                                let borderStyle = isEditing ? 'dashed' : 'solid';
+                                let backgroundColor = cmdType ? getCmdColor(cmdType) : 'white';
+                                let iconColor = undefined;
+
+                                if (cond) {
+                                    // Light background colors for conditions
+                                    const LIGHT_COLORS = {
+                                        RED: '#fee2e2',
+                                        BLUE: '#dbeafe',
+                                        GREEN: '#d1fae5'
+                                    };
+
+                                    borderColor = PAINT_COLORS[cond];
+                                    backgroundColor = LIGHT_COLORS[cond];
+                                    borderWidth = '1px'; // Keep thin border for look
+                                    borderStyle = 'solid';
+                                }
+
+                                return (
+                                    <button key={i} onClick={() => !isPlaying && cmdObj && onRemoveCommand(funcId, i)} className="flex-center"
+                                        style={{
+                                            width: '50px', height: '50px', minWidth: '50px', borderRadius: '10px',
+                                            border: `${borderWidth} ${borderStyle} ${borderColor}`,
+                                            background: backgroundColor,
+                                            color: iconColor,
+                                            cursor: (!isPlaying && cmdObj) ? 'pointer' : 'default',
+                                            transform: 'scale(1)', // No scale
+                                            transition: 'all 0.2s',
+                                            boxShadow: 'none', // No shadow
+                                            position: 'relative'
+                                        }}>
+                                        {cmdType && getIcon(cmdType, iconColor)}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            };
+
+            const isConfigEnabled = (configGroup, key) => {
+                if (configGroup === true) return true; // Legacy support: true means all enabled
+                if (!configGroup) return false;
+                if (typeof configGroup === 'object') {
+                    return !!configGroup[key];
+                }
+                return false;
+            };
+
+            const renderButton = (cmd, isAvailable, icon) => {
+                const isDisabled = !isAvailable || isPlaying;
+                return (
+                    <button
+                        onClick={() => isAvailable && onAddCommand(cmd)}
+                        disabled={isDisabled}
+                        className="btn-icon"
+                        style={{
+                            background: '#e5e7eb',
+                            opacity: isDisabled ? 0.3 : 1,
+                            width: '100%',
+                            height: '50px',
+                            minWidth: '50px',
+                            minHeight: '50px',
+                            cursor: isDisabled ? 'default' : 'pointer'
+                        }}>
+                        {icon}
+                    </button>
+                );
+            };
+
+            return (
+                <div className="glass-panel" style={{ width: '100%', maxWidth: '1000px', marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+                    {/* Top Bar: Play/Reset Controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: '16px' }}>
+
+                        {/* Execution Status / Visualization */}
+                        <div style={{ flex: 1, minWidth: 0, marginRight: '16px' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#374151', marginBottom: '8px' }}>Execution</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'hidden', padding: '4px' }}>
+                                <div style={{ color: '#6b7280', flexShrink: 0 }}> <IconTerminal size={20} /> </div>
+                                <div style={{ display: 'flex', gap: '4px', padding: '4px', overflowX: 'auto', maskImage: 'linear-gradient(to right, black 90%, transparent 100%)', flex: 1 }}>
+                                    {isPlaying ? (() => {
+                                        // 1. Current function remaining commands
+                                        const currentFuncCmds = (programs[execState.funcId || 'f0'] || [])
+                                            .slice(execState.index + 1)
+                                            .map((cmdObj, i) => ({
+                                                ...cmdObj,
+                                                _key: `active-${execState.funcId}-${execState.index + 1 + i}`
+                                            }));
+
+                                        // 2. Stack remaining commands
+                                        // stack is [...stack], we reverse to get immediate caller first
+                                        const stackCmds = execState.stack.slice().reverse().flatMap((frame, fIdx) => {
+                                            const p = programs[frame.funcId] || [];
+                                            // We must slice from index + 1 because frame.index is the *call site*.
+                                            // The future commands start AFTER the call site.
+                                            return p.slice(frame.index + 1).map((cmdObj, i) => ({
+                                                ...cmdObj,
+                                                _key: `stack-${frame.funcId}-${frame.index + 1 + i}`
+                                            }));
+                                        });
+
+                                        const fullQueue = [...currentFuncCmds, ...stackCmds].slice(0, 30); // Limit to 20
+
+                                        return fullQueue.map((cmdObj, i) => {
+                                            const isActive = i === 0;
+                                            const cond = cmdObj.cond;
+
+                                            // Default colors (Neutral)
+                                            let borderColor = '#e5e7eb';
+                                            let backgroundColor = 'white';
+                                            let iconColor = '#6b7280';
+
+                                            // Condition Overrides
+                                            if (cond) {
+                                                const LIGHT_COLORS = {
+                                                    RED: '#fee2e2', BLUE: '#dbeafe', GREEN: '#d1fae5'
+                                                };
+                                                borderColor = PAINT_COLORS[cond];
+                                                backgroundColor = LIGHT_COLORS[cond];
+                                            }
+
+                                            return (
+                                                <div key={cmdObj._key || i} style={{
+                                                    width: '28px', height: '28px', borderRadius: '4px',
+                                                    background: backgroundColor,
+                                                    border: `1px solid ${borderColor}`,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    transform: isActive ? 'scale(1.3)' : 'scale(1)', // Slightly larger scale
+                                                    transition: 'all 0.2s',
+                                                    color: iconColor,
+                                                    zIndex: isActive ? 10 : 1,
+                                                    boxShadow: isActive ? '0 4px 8px rgba(0,0,0,0.15)' : 'none', // Subtle shadow for lift,
+                                                    flexShrink: 0
+                                                }}>
+                                                    {getIcon(cmdObj.type)}
+                                                </div>
+                                            );
+                                        });
+                                    })() : (
+                                        <div style={{ color: '#9ca3af', fontSize: '0.9rem', paddingLeft: '4px', alignSelf: 'center' }}>Ready to run...</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', flexShrink: 0, alignSelf: 'flex-start', marginTop: '8px' }}>
+                            {/* Play / Pause Button */}
+                            <button className="btn btn-primary"
+                                onClick={(!isPlaying && programs.f0.length > 0) ? onPlay : onPause}
+                                disabled={!isPlaying && programs.f0.length === 0}
+                                style={{
+                                    width: '50px', height: '50px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
+                                    opacity: (!isPlaying && programs.f0.length === 0) ? 0.3 : 1,
+                                    cursor: (!isPlaying && programs.f0.length === 0) ? 'not-allowed' : 'pointer'
+                                }}>
+                                {(!isPlaying || isPaused) ? <IconPlay size={24} /> : <IconPause size={24} />}
+                            </button>
+
+                            {/* Stop Button (Always visible, disabled when not playing) */}
+                            <button className="btn" onClick={isPlaying ? onReset : undefined} disabled={!isPlaying} style={{
+                                width: '50px', height: '50px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
+                                background: '#ef4444', color: 'white', opacity: !isPlaying ? 0.3 : 1, cursor: !isPlaying ? 'not-allowed' : 'pointer'
+                            }}>
+                                <IconSquare size={24} />
+                            </button>
+
+                            {/* Speed Button */}
+                            <button className="btn" onClick={onToggleSpeed} style={{
+                                width: '50px', height: '50px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
+                                background: 'white', border: '1px solid #d1d5db', color: '#4b5563', fontWeight: 'bold', fontSize: '1rem',
+                                opacity: 1, cursor: 'pointer'
+                            }}>
+                                x{speed}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '40px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+
+                        {/* Left Column: Commands */}
+                        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#6b7280' }}>Commands</div>
+
+                            <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+                                {/* 3x3 Grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 50px)', gap: '12px' }}>
+                                    {/* Row 1 */}
+                                    {renderButton(COMMANDS.LEFT, true, <IconCornerUpLeft />)}
+                                    {renderButton(COMMANDS.FORWARD, true, <IconArrowUp />)}
+                                    {renderButton(COMMANDS.RIGHT, true, <IconCornerUpRight />)}
+                                    {/* Row 2 */}
+                                    {renderButton(COMMANDS.F0, !!levelConfigs.f0, <span style={{ fontWeight: 900 }}>f0</span>)}
+                                    {renderButton(COMMANDS.F1, !!levelConfigs.f1, <span style={{ fontWeight: 900 }}>f1</span>)}
+                                    {renderButton(COMMANDS.F2, !!levelConfigs.f2, <span style={{ fontWeight: 900 }}>f2</span>)}
+                                    {/* Row 3 */}
+                                    {/* Row 3 - Paint Commands */
+                                        renderButton(COMMANDS.PAINT_RED, isConfigEnabled(levelConfigs.paint, 'red'), <IconDroplet size={24} fill={PAINT_COLORS.RED} color={PAINT_COLORS.RED} />)}
+                                    {renderButton(COMMANDS.PAINT_BLUE, isConfigEnabled(levelConfigs.paint, 'blue'), <IconDroplet size={24} fill={PAINT_COLORS.BLUE} color={PAINT_COLORS.BLUE} />)}
+                                    {renderButton(COMMANDS.PAINT_GREEN, isConfigEnabled(levelConfigs.paint, 'green'), <IconDroplet size={24} fill={PAINT_COLORS.GREEN} color={PAINT_COLORS.GREEN} />)}
+                                </div>
+
+                                {/* Condition Column */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    {[
+                                        { cond: CONDITIONS.RED, color: PAINT_COLORS.RED, key: 'red' },
+                                        { cond: CONDITIONS.BLUE, color: PAINT_COLORS.BLUE, key: 'blue' },
+                                        { cond: CONDITIONS.GREEN, color: PAINT_COLORS.GREEN, key: 'green' }
+                                    ].map(item => {
+                                        // Check availability
+                                        if (!isConfigEnabled(levelConfigs.conditions, item.key)) return null;
+
+                                        const isActive = activeCondition === item.cond;
+                                        return (
+                                            <button key={item.cond}
+                                                onClick={() => setActiveCondition(isActive ? CONDITIONS.NONE : item.cond)}
+                                                className="btn-icon"
+                                                style={{
+                                                    width: '50px', height: '50px',
+                                                    minWidth: '50px', minHeight: '50px',
+                                                    border: isActive ? `3px solid ${item.color}` : '1px solid #d1d5db',
+                                                    background: isActive ? 'white' : '#f9fafb',
+                                                    opacity: isPlaying ? 0.5 : 1,
+                                                    cursor: isPlaying ? 'default' : 'pointer'
+                                                }}
+                                                title={`Condition: ${item.cond}`}
+                                            >
+                                                <div style={{
+                                                    width: '20px', height: '20px', borderRadius: '50%',
+                                                    background: item.color,
+                                                    opacity: isActive ? 1 : 0.6
+                                                }} />
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>          </div>
+
+                        {/* Right Column: Functions */}
+                        <div style={{ flex: 1, minWidth: '300px' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#6b7280', marginBottom: '16px' }}>Functions</div>
+                            {renderRow('f0', 'f0', 'var(--primary)')}
+                            {renderRow('f1', 'f1', '#8b5cf6')}
+                            {renderRow('f2', 'f2', '#db2777')}
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        function App() {
+            // Load from global variable defined in levels.js
+            const [levels, setLevels] = useState(window.ROBO_LEVELS || []);
+
+            if (!window.ROBO_LEVELS) {
+                return <div style={{ width: '100%', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem', fontFamily: 'sans-serif', color: 'red' }}>Error: levels.js not loaded or invalid.</div>;
+            }
+
+            const { level, robot, programs, isPlaying, isPaused, gameStatus, execState, activeEditFunc, setActiveEditFunc, collectedStars, paintedTiles, activeCondition, setActiveCondition, addCommand, removeCommand, runProgram, resetGame, nextLevel, togglePause, speed, toggleSpeed } = useGameLogic(levels);
+            return (
+                <div style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+                    <div style={{ position: 'fixed', top: '-20%', left: '-10%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(96,165,250,0.4) 0%, rgba(0,0,0,0) 70%)', zIndex: -1 }} />
+                    <div style={{ position: 'fixed', bottom: '-20%', right: '-10%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(52,211,153,0.3) 0%, rgba(0,0,0,0) 70%)', zIndex: -1 }} />
+                    <h1 style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '2rem', background: 'linear-gradient(135deg, #2563eb 0%, #10b981 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 4px 20px rgba(0,0,0,0.1)' }}> Robo Logic </h1>
+                    <div style={{ fontSize: '1.2rem', color: 'var(--text-muted)', marginBottom: '1rem' }}> {level.name} </div>
+                    <Board level={level} robot={robot} collectedStars={collectedStars} paintedTiles={paintedTiles} />
+                    <Controls levelConfigs={level.configs} programs={programs} execState={execState} activeEditFunc={activeEditFunc} setActiveEditFunc={setActiveEditFunc} onAddCommand={addCommand} onRemoveCommand={removeCommand} onPlay={runProgram} onReset={resetGame} isPlaying={isPlaying} isPaused={isPaused} onPause={togglePause} activeCondition={activeCondition} setActiveCondition={setActiveCondition} speed={speed} onToggleSpeed={toggleSpeed} />
+                    {(gameStatus === 'WON' || gameStatus === 'LOST') && (
+                        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+                            <div className="glass-panel" style={{ background: 'white', padding: '40px', textAlign: 'center', maxWidth: '400px' }}>
+                                <h2 style={{ fontSize: '2rem', marginBottom: '16px', color: gameStatus === 'WON' ? 'var(--secondary)' : 'var(--danger)' }}> {gameStatus === 'WON' ? 'Level Cleared!' : 'Try Again'} </h2>
+                                <p style={{ marginBottom: '24px', color: 'var(--text-muted)' }}> {gameStatus === 'WON' ? "You collected all stars!" : "The robot didn't collect all stars."} </p>
+                                <button className="btn btn-primary" onClick={gameStatus === 'WON' ? nextLevel : resetGame} style={{ width: '100%', padding: '12px' }}> {gameStatus === 'WON' ? 'Next Level' : 'Retry'} </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
