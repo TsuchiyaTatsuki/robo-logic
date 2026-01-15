@@ -8,8 +8,8 @@
     <!-- Load Levels Data -->
     <script src="levels.js"></script>
 
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -36,6 +36,8 @@
             --radius-lg: 16px;
             --radius-md: 8px;
             --radius-sm: 4px;
+
+            --btn-size: 50px;
         }
 
         * {
@@ -103,8 +105,10 @@
         }
 
         .btn-icon {
-            width: 40px;
-            height: 40px;
+            width: var(--btn-size);
+            height: var(--btn-size);
+            min-width: var(--btn-size);
+            min-height: var(--btn-size);
             border-radius: var(--radius-md);
             background: white;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -122,6 +126,32 @@
 
         .btn-icon:active {
             transform: translateY(0);
+        }
+
+        @media (max-width: 600px) {
+            :root {
+                --btn-size: 42px;
+            }
+
+            #root {
+                padding: 16px 8px;
+            }
+
+            .glass-panel {
+                padding: 16px;
+            }
+
+            .btn {
+                padding: 6px 12px;
+                font-size: 0.9rem;
+            }
+
+
+
+            h1 {
+                font-size: 2.5rem !important;
+                /* Force smaller title */
+            }
         }
     </style>
 </head>
@@ -220,11 +250,10 @@
         };
 
         const DIRECTIONS = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
-        const MAX_STEPS = 60;
 
-        function useGameLogic(initialLevels) {
-            const [levelIndex, setLevelIndex] = useState(0);
-            const [level, setLevel] = useState(initialLevels[0]);
+        function useGameLogic(initialLevel) {
+            // Refactored to handle a single level passed from App
+            const [level, setLevel] = useState(initialLevel);
             const [robot, setRobot] = useState({ x: 0, y: 0, dir: 0 });
 
             const [programs, setPrograms] = useState({ f0: [], f1: [], f2: [] });
@@ -244,14 +273,13 @@
 
             const stepCountRef = useRef(0);
 
-            useEffect(() => { loadLevel(levelIndex); }, [levelIndex]);
+            useEffect(() => { loadLevel(initialLevel); }, [initialLevel]);
 
 
 
 
 
-            const loadLevel = (idx) => {
-                const lvl = initialLevels[idx];
+            const loadLevel = (lvl) => {
                 setLevel(lvl);
                 let startX = lvl.startPos.x;
                 let startY = lvl.startPos.y;
@@ -325,6 +353,10 @@
                         cond: activeCondition
                     };
                     setPrograms({ ...programs, [activeEditFunc]: [...currentList, cmdObj] });
+
+                    if (activeCondition !== CONDITIONS.NONE) {
+                        setActiveCondition(CONDITIONS.NONE);
+                    }
                 }
             };
 
@@ -387,11 +419,6 @@
                 }
 
                 stepCountRef.current += 1;
-                if (stepCountRef.current > MAX_STEPS) {
-                    setIsPlaying(false);
-                    setGameStatus('LOST');
-                    return;
-                }
 
                 const cmdObj = currentProg[nextIndex];
                 const cmd = cmdObj.type;
@@ -423,8 +450,25 @@
                         const d = DIRECTIONS[normalizedDir];
                         const nx = newRobot.x + d.x;
                         const ny = newRobot.y + d.y;
-                        if (ny >= 0 && ny < level.grid.length && nx >= 0 && nx < level.grid[0].length &&
-                            level.grid[ny][nx] !== TILE_TYPES.VOID && level.grid[ny][nx] !== TILE_TYPES.OBSTACLE) {
+
+                        // Check Void / Out of bounds
+                        const isOutOfBounds = ny < 0 || ny >= level.grid.length || nx < 0 || nx >= level.grid[0].length;
+                        const isVoid = !isOutOfBounds && level.grid[ny][nx] === TILE_TYPES.VOID;
+
+                        // Check Obstacle
+                        const isObstacle = !isOutOfBounds && !isVoid && level.grid[ny][nx] === TILE_TYPES.OBSTACLE;
+
+                        if (isOutOfBounds || isVoid) {
+                            // Move into failure and lose
+                            newRobot.x = nx;
+                            newRobot.y = ny;
+                            setGameStatus('LOST');
+                            setIsPlaying(false);
+                            // We still let the state update at the bottom (newRobot) so the visual updates to the void tile
+                        } else if (isObstacle) {
+                            // Blocked: Do nothing (Hit wall)
+                        } else {
+                            // Valid Move
                             newRobot.x = nx; newRobot.y = ny;
 
                             const cell = level.grid[ny][nx];
@@ -474,9 +518,9 @@
                 }
             }, [execState, programs, robot, level, gameStatus, collectedStars, totalStars, paintedTiles]);
 
+            // nextLevel removed, handled by App via "Back to Menu"
             const nextLevel = () => {
-                if (levelIndex < initialLevels.length - 1) setLevelIndex(prev => prev + 1);
-                else setLevelIndex(0);
+                // No-op or reused for "Win" signal if needed, but App handles the UI
             };
 
             const togglePause = () => setIsPaused(prev => !prev);
@@ -512,57 +556,169 @@
         const Board = ({ level, robot, collectedStars, paintedTiles }) => {
             const rows = level.grid.length;
             const cols = level.grid[0].length;
-            return (
-                <div className="glass-panel" style={{ position: 'relative' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, var(--grid-cell-size))`, gridTemplateRows: `repeat(${rows}, var(--grid-cell-size))`, gridGap: 'var(--grid-gap)' }}>
-                        {level.grid.map((row, y) => row.map((cell, x) => {
-                            const isStarTile = isPath(cell);
-                            const isCollected = collectedStars.includes(`${x},${y}`);
-                            const isBackground = cell === TILE_TYPES.VOID;
-                            const paintedColor = paintedTiles[`${x},${y}`];
-                            const baseColor = TILE_COLORS[cell] || TILE_COLORS[TILE_TYPES.PATH_BLUE]; // Fallback
-                            const finalColor = paintedColor || baseColor;
+            const containerRef = useRef(null);
+            const [boardSize, setBoardSize] = useState(500);
 
-                            return (
-                                <div key={`${x}-${y}`} className="flex-center" style={{
-                                    backgroundColor: finalColor, borderRadius: '8px',
-                                    opacity: isBackground ? 0.05 : 1,
-                                    boxShadow: !isBackground ? 'inset 0 -4px 0 rgba(0,0,0,0.2)' : 'none',
-                                    color: 'white', fontWeight: 'bold', fontSize: '1.2rem',
-                                    transition: 'background-color 0.3s ease'
-                                }}>
-                                    {isStarTile && !isCollected && !(x === level.startPos.x && y === level.startPos.y) && '★'}
-                                </div>
-                            );
-                        }))}
-                    </div>
-                    {/* ... robot container ... */}
-                    <div style={{
-                        position: 'absolute', top: '24px', left: '24px',
-                        width: 'var(--grid-cell-size)', height: 'var(--grid-cell-size)',
-                        transform: `translate(${robot.x * 68}px, ${robot.y * 68}px)`,
-                        transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                        pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                        <div style={{
-                            width: '100%', height: '100%',
-                            borderRadius: '8px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transform: `rotate(${robot.dir * 90}deg)`, transition: 'transform 0.4s ease-in-out', zIndex: 10
-                        }}>
-                            {/* Robot content */}
-                            <div style={{
-                                width: '60%', height: '60%', background: 'white', borderRadius: '50%',
-                                boxShadow: '0 4px 6px rgba(0,0,0,0.2)', position: 'relative'
+            // ZOOM STATE
+            const [zoom, setZoom] = useState(1);
+            const lastDistRef = useRef(null);
+
+            // Responsive Board Size Logic
+            useEffect(() => {
+                const updateSize = () => {
+                    if (containerRef.current) {
+                        const maxWidth = Math.min(window.innerWidth - 40, 550);
+                        const available = maxWidth - 48;
+                        setBoardSize(available);
+                    }
+                };
+
+                window.addEventListener('resize', updateSize);
+                updateSize();
+                return () => window.removeEventListener('resize', updateSize);
+            }, []);
+
+            // TOUCH EVENTS FOR PINCH ZOOM
+            useEffect(() => {
+                const domNode = containerRef.current;
+                if (!domNode) return;
+
+                const getDistance = (touches) => {
+                    const t1 = touches[0];
+                    const t2 = touches[1];
+                    const dx = t1.clientX - t2.clientX;
+                    const dy = t1.clientY - t2.clientY;
+                    return Math.hypot(dx, dy);
+                };
+
+                const handleTouchStart = (e) => {
+                    if (e.touches.length === 2) {
+                        lastDistRef.current = getDistance(e.touches);
+                    }
+                };
+
+                const handleTouchMove = (e) => {
+                    if (e.touches.length === 2 && lastDistRef.current) {
+                        const dist = getDistance(e.touches);
+                        const scale = dist / lastDistRef.current;
+
+                        setZoom(prev => Math.min(Math.max(prev * scale, 0.5), 3));
+                        lastDistRef.current = dist;
+
+                        // Prevent default scaling behavior of browser
+                        if (e.cancelable) e.preventDefault();
+                    }
+                };
+
+                const handleTouchEnd = () => {
+                    lastDistRef.current = null;
+                };
+
+                // Use passive: false to allow preventDefault
+                domNode.addEventListener('touchstart', handleTouchStart, { passive: true });
+                domNode.addEventListener('touchmove', handleTouchMove, { passive: false });
+                domNode.addEventListener('touchend', handleTouchEnd);
+
+                return () => {
+                    domNode.removeEventListener('touchstart', handleTouchStart);
+                    domNode.removeEventListener('touchmove', handleTouchMove);
+                    domNode.removeEventListener('touchend', handleTouchEnd);
+                };
+            }, []);
+
+            const GAP = 8;
+            const cellW = (boardSize - (cols - 1) * GAP) / cols;
+            const cellH = (boardSize - (rows - 1) * GAP) / rows;
+            const baseCellSize = Math.floor(Math.min(cellW, cellH));
+            // Apply zoom to cell size
+            const cellSize = Math.floor(baseCellSize * zoom);
+
+            return (
+                <div className="glass-panel" ref={containerRef} style={{
+                    position: 'relative',
+                    width: '100%',
+                    maxWidth: '550px',
+                    aspectRatio: '1/1',
+                    display: 'flex',
+                    alignItems: 'center', // Keep centered when smaller
+                    justifyContent: 'center',
+                    boxSizing: 'border-box',
+                    overflow: 'auto', // Allow scrolling when zoomed in
+                    touchAction: 'pan-x pan-y', // Explicitly allow panning
+                }}>
+                    <div style={{ position: 'relative', margin: 'auto' }}>
+                        {/* Zoom Indicator / Reset */}
+                        {zoom !== 1 && (
+                            <div onClick={() => setZoom(1)} style={{
+                                position: 'absolute', top: '-30px', right: 0,
+                                background: 'rgba(0,0,0,0.6)', color: 'white',
+                                padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', zIndex: 20
                             }}>
+                                x{zoom.toFixed(1)} (Reset)
+                            </div>
+                        )}
+
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+                            gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
+                            gridGap: `${GAP}px`
+                        }}>
+                            {level.grid.map((row, y) => row.map((cell, x) => {
+                                const isStarTile = isPath(cell);
+                                const isCollected = collectedStars.includes(`${x},${y}`);
+                                const isBackground = cell === TILE_TYPES.VOID;
+                                const paintedColor = paintedTiles[`${x},${y}`];
+                                const baseColor = TILE_COLORS[cell] || TILE_COLORS[TILE_TYPES.PATH_BLUE]; // Fallback
+                                const finalColor = paintedColor || baseColor;
+
+                                return (
+                                    <div key={`${x}-${y}`} className="flex-center" style={{
+                                        backgroundColor: finalColor,
+                                        borderRadius: cellSize > 30 ? '8px' : '4px',
+                                        opacity: isBackground ? 0.3 : 1, // More visible VOID
+                                        boxShadow: !isBackground
+                                            ? 'inset 0 -4px 0 rgba(0,0,0,0.2)'
+                                            : 'inset 0 0 10px rgba(0,0,0,0.1)', // Inner shadow for VOID
+                                        color: 'white', fontWeight: 'bold', fontSize: `${cellSize * 0.4}px`, // Scale font
+                                        transition: 'background-color 0.3s ease',
+                                        border: isBackground ? '2px dashed rgba(0,0,0,0.05)' : 'none',
+                                        width: `${cellSize}px`,
+                                        height: `${cellSize}px`
+                                    }}>
+                                        {isStarTile && !isCollected && !(x === level.startPos.x && y === level.startPos.y) && '★'}
+                                    </div>
+                                );
+                            }))}
+                        </div>
+                        {/* ... robot container ... */}
+                        <div style={{
+                            position: 'absolute', top: 0, left: 0,
+                            width: `${cellSize}px`, height: `${cellSize}px`,
+                            transform: `translate(${robot.x * (cellSize + GAP)}px, ${robot.y * (cellSize + GAP)}px)`,
+                            transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                            pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                            <div style={{
+                                width: '100%', height: '100%',
+                                borderRadius: '8px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transform: `rotate(${robot.dir * 90}deg)`, transition: 'transform 0.4s ease-in-out', zIndex: 10
+                            }}>
+                                {/* Robot content */}
                                 <div style={{
-                                    position: 'absolute', top: '20%', left: '50%', transform: 'translate(-50%, 0)',
-                                    width: '12px', height: '12px', background: '#374151', borderRadius: '50%'
-                                }} />
+                                    width: '60%', height: '60%', background: 'white', borderRadius: '50%',
+                                    boxShadow: '0 4px 6px rgba(0,0,0,0.2)', position: 'relative'
+                                }}>
+                                    <div style={{
+                                        position: 'absolute', top: '20%', left: '50%', transform: 'translate(-50%, 0)',
+                                        width: '35%', height: '35%', background: '#374151', borderRadius: '50%'
+                                    }} />
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div >
+                </div>
             );
         };
 
@@ -635,7 +791,7 @@
                                 return (
                                     <button key={i} onClick={() => !isPlaying && cmdObj && onRemoveCommand(funcId, i)} className="flex-center"
                                         style={{
-                                            width: '50px', height: '50px', minWidth: '50px', borderRadius: '10px',
+                                            width: 'var(--btn-size)', height: 'var(--btn-size)', minWidth: 'var(--btn-size)', borderRadius: '10px',
                                             border: `${borderWidth} ${borderStyle} ${borderColor}`,
                                             background: backgroundColor,
                                             color: iconColor,
@@ -674,9 +830,9 @@
                             background: '#e5e7eb',
                             opacity: isDisabled ? 0.3 : 1,
                             width: '100%',
-                            height: '50px',
-                            minWidth: '50px',
-                            minHeight: '50px',
+                            height: 'var(--btn-size)',
+                            minWidth: 'var(--btn-size)',
+                            minHeight: 'var(--btn-size)',
                             cursor: isDisabled ? 'default' : 'pointer'
                         }}>
                         {icon}
@@ -767,7 +923,7 @@
                                 onClick={(!isPlaying && programs.f0.length > 0) ? onPlay : onPause}
                                 disabled={!isPlaying && programs.f0.length === 0}
                                 style={{
-                                    width: '50px', height: '50px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
+                                    width: 'var(--btn-size)', height: 'var(--btn-size)', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
                                     opacity: (!isPlaying && programs.f0.length === 0) ? 0.3 : 1,
                                     cursor: (!isPlaying && programs.f0.length === 0) ? 'not-allowed' : 'pointer'
                                 }}>
@@ -776,7 +932,7 @@
 
                             {/* Stop Button (Always visible, disabled when not playing) */}
                             <button className="btn" onClick={isPlaying ? onReset : undefined} disabled={!isPlaying} style={{
-                                width: '50px', height: '50px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
+                                width: 'var(--btn-size)', height: 'var(--btn-size)', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
                                 background: '#ef4444', color: 'white', opacity: !isPlaying ? 0.3 : 1, cursor: !isPlaying ? 'not-allowed' : 'pointer'
                             }}>
                                 <IconSquare size={24} />
@@ -784,7 +940,7 @@
 
                             {/* Speed Button */}
                             <button className="btn" onClick={onToggleSpeed} style={{
-                                width: '50px', height: '50px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
+                                width: 'var(--btn-size)', height: 'var(--btn-size)', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px',
                                 background: 'white', border: '1px solid #d1d5db', color: '#4b5563', fontWeight: 'bold', fontSize: '1rem',
                                 opacity: 1, cursor: 'pointer'
                             }}>
@@ -801,7 +957,7 @@
 
                             <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
                                 {/* 3x3 Grid */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 50px)', gap: '12px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, var(--btn-size))', gap: '12px' }}>
                                     {/* Row 1 */}
                                     {renderButton(COMMANDS.LEFT, true, <IconCornerUpLeft />)}
                                     {renderButton(COMMANDS.FORWARD, true, <IconArrowUp />)}
@@ -833,8 +989,8 @@
                                                 onClick={() => setActiveCondition(isActive ? CONDITIONS.NONE : item.cond)}
                                                 className="btn-icon"
                                                 style={{
-                                                    width: '50px', height: '50px',
-                                                    minWidth: '50px', minHeight: '50px',
+                                                    width: 'var(--btn-size)', height: 'var(--btn-size)',
+                                                    minWidth: 'var(--btn-size)', minHeight: 'var(--btn-size)',
                                                     border: isActive ? `3px solid ${item.color}` : '1px solid #d1d5db',
                                                     background: isActive ? 'white' : '#f9fafb',
                                                     opacity: isPlaying ? 0.5 : 1,
@@ -866,33 +1022,85 @@
             );
         };
 
-        function App() {
-            // Load from global variable defined in levels.js
-            const [levels, setLevels] = useState(window.ROBO_LEVELS || []);
 
-            if (!window.ROBO_LEVELS) {
-                return <div style={{ width: '100%', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem', fontFamily: 'sans-serif', color: 'red' }}>Error: levels.js not loaded or invalid.</div>;
-            }
+        const LevelSelector = ({ levels, onSelectLevel }) => {
+            return (
+                <div style={{ width: '100%', maxWidth: '800px', margin: '40px auto', textAlign: 'center' }}>
+                    <h1 style={{ fontSize: '3.5rem', fontWeight: '800', marginBottom: '40px', background: 'linear-gradient(135deg, #2563eb 0%, #10b981 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 4px 20px rgba(0,0,0,0.1)' }}> Robo Logic </h1>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '24px', padding: '0 16px' }}>
+                        {levels.map((level, index) => (
+                            <button key={level.id} onClick={() => onSelectLevel(index)}
+                                className="glass-panel"
+                                style={{
+                                    padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
+                                    border: '2px solid transparent', cursor: 'pointer', transition: 'all 0.3s ease',
+                                    background: 'rgba(255,255,255,0.8)'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
+                            >
+                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>Level {index + 1}</div>
+                                <div style={{ fontSize: '1rem', color: '#4b5563' }}>{level.name}</div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
 
-            const { level, robot, programs, isPlaying, isPaused, gameStatus, execState, activeEditFunc, setActiveEditFunc, collectedStars, paintedTiles, activeCondition, setActiveCondition, addCommand, removeCommand, runProgram, resetGame, nextLevel, togglePause, speed, toggleSpeed } = useGameLogic(levels);
+        const Game = ({ level, onBack }) => {
+            // Note: robot, programs etc. are initialized per level instance
+            const { robot, programs, isPlaying, isPaused, gameStatus, execState, activeEditFunc, setActiveEditFunc, collectedStars, paintedTiles, activeCondition, setActiveCondition, addCommand, removeCommand, runProgram, resetGame, togglePause, speed, toggleSpeed } = useGameLogic(level);
+
             return (
                 <div style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+                    {/* Back Button */}
+                    <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10 }}>
+                        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'white', border: '1px solid #d1d5db', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#4b5563', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                            <span>←</span> Menu
+                        </button>
+                    </div>
+
                     <div style={{ position: 'fixed', top: '-20%', left: '-10%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(96,165,250,0.4) 0%, rgba(0,0,0,0) 70%)', zIndex: -1 }} />
                     <div style={{ position: 'fixed', bottom: '-20%', right: '-10%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(52,211,153,0.3) 0%, rgba(0,0,0,0) 70%)', zIndex: -1 }} />
-                    <h1 style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '2rem', background: 'linear-gradient(135deg, #2563eb 0%, #10b981 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 4px 20px rgba(0,0,0,0.1)' }}> Robo Logic </h1>
-                    <div style={{ fontSize: '1.2rem', color: 'var(--text-muted)', marginBottom: '1rem' }}> {level.name} </div>
+
+                    {/* Header */}
+                    <div style={{ textAlign: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--primary)', letterSpacing: '1px' }}>ROBO LOGIC</div>
+                        <div style={{ fontSize: '1.5rem', color: '#1f2937', fontWeight: 'bold' }}> {level.name} </div>
+                    </div>
+
                     <Board level={level} robot={robot} collectedStars={collectedStars} paintedTiles={paintedTiles} />
                     <Controls levelConfigs={level.configs} programs={programs} execState={execState} activeEditFunc={activeEditFunc} setActiveEditFunc={setActiveEditFunc} onAddCommand={addCommand} onRemoveCommand={removeCommand} onPlay={runProgram} onReset={resetGame} isPlaying={isPlaying} isPaused={isPaused} onPause={togglePause} activeCondition={activeCondition} setActiveCondition={setActiveCondition} speed={speed} onToggleSpeed={toggleSpeed} />
+
                     {(gameStatus === 'WON' || gameStatus === 'LOST') && (
                         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
                             <div className="glass-panel" style={{ background: 'white', padding: '40px', textAlign: 'center', maxWidth: '400px' }}>
                                 <h2 style={{ fontSize: '2rem', marginBottom: '16px', color: gameStatus === 'WON' ? 'var(--secondary)' : 'var(--danger)' }}> {gameStatus === 'WON' ? 'Level Cleared!' : 'Try Again'} </h2>
                                 <p style={{ marginBottom: '24px', color: 'var(--text-muted)' }}> {gameStatus === 'WON' ? "You collected all stars!" : "The robot didn't collect all stars."} </p>
-                                <button className="btn btn-primary" onClick={gameStatus === 'WON' ? nextLevel : resetGame} style={{ width: '100%', padding: '12px' }}> {gameStatus === 'WON' ? 'Next Level' : 'Retry'} </button>
+                                <button className="btn btn-primary" onClick={gameStatus === 'WON' ? onBack : resetGame} style={{ width: '100%', padding: '12px' }}> {gameStatus === 'WON' ? 'Back to Menu' : 'Retry'} </button>
                             </div>
                         </div>
                     )}
                 </div>
+            );
+        };
+
+        function App() {
+            // Load from global variable defined in levels.js
+            const [levels, setLevels] = useState(window.ROBO_LEVELS || []);
+            const [selectedLevelIndex, setSelectedLevelIndex] = useState(null);
+
+            if (!window.ROBO_LEVELS) {
+                return <div style={{ width: '100%', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem', fontFamily: 'sans-serif', color: 'red' }}>Error: levels.js not loaded or invalid.</div>;
+            }
+
+            if (selectedLevelIndex === null) {
+                return <LevelSelector levels={levels} onSelectLevel={setSelectedLevelIndex} />;
+            }
+
+            return (
+                <Game level={levels[selectedLevelIndex]} onBack={() => setSelectedLevelIndex(null)} />
             );
         }
 

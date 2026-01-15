@@ -222,9 +222,9 @@
         const DIRECTIONS = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];
         const MAX_STEPS = 60;
 
-        function useGameLogic(initialLevels) {
-            const [levelIndex, setLevelIndex] = useState(0);
-            const [level, setLevel] = useState(initialLevels[0]);
+        function useGameLogic(initialLevel) {
+            // Refactored to handle a single level passed from App
+            const [level, setLevel] = useState(initialLevel);
             const [robot, setRobot] = useState({ x: 0, y: 0, dir: 0 });
 
             const [programs, setPrograms] = useState({ f0: [], f1: [], f2: [] });
@@ -244,14 +244,13 @@
 
             const stepCountRef = useRef(0);
 
-            useEffect(() => { loadLevel(levelIndex); }, [levelIndex]);
+            useEffect(() => { loadLevel(initialLevel); }, [initialLevel]);
 
 
 
 
 
-            const loadLevel = (idx) => {
-                const lvl = initialLevels[idx];
+            const loadLevel = (lvl) => {
                 setLevel(lvl);
                 let startX = lvl.startPos.x;
                 let startY = lvl.startPos.y;
@@ -423,8 +422,25 @@
                         const d = DIRECTIONS[normalizedDir];
                         const nx = newRobot.x + d.x;
                         const ny = newRobot.y + d.y;
-                        if (ny >= 0 && ny < level.grid.length && nx >= 0 && nx < level.grid[0].length &&
-                            level.grid[ny][nx] !== TILE_TYPES.VOID && level.grid[ny][nx] !== TILE_TYPES.OBSTACLE) {
+
+                        // Check Void / Out of bounds
+                        const isOutOfBounds = ny < 0 || ny >= level.grid.length || nx < 0 || nx >= level.grid[0].length;
+                        const isVoid = !isOutOfBounds && level.grid[ny][nx] === TILE_TYPES.VOID;
+
+                        // Check Obstacle
+                        const isObstacle = !isOutOfBounds && !isVoid && level.grid[ny][nx] === TILE_TYPES.OBSTACLE;
+
+                        if (isOutOfBounds || isVoid) {
+                            // Move into failure and lose
+                            newRobot.x = nx;
+                            newRobot.y = ny;
+                            setGameStatus('LOST');
+                            setIsPlaying(false);
+                            // We still let the state update at the bottom (newRobot) so the visual updates to the void tile
+                        } else if (isObstacle) {
+                            // Blocked: Do nothing (Hit wall)
+                        } else {
+                            // Valid Move
                             newRobot.x = nx; newRobot.y = ny;
 
                             const cell = level.grid[ny][nx];
@@ -474,9 +490,9 @@
                 }
             }, [execState, programs, robot, level, gameStatus, collectedStars, totalStars, paintedTiles]);
 
+            // nextLevel removed, handled by App via "Back to Menu"
             const nextLevel = () => {
-                if (levelIndex < initialLevels.length - 1) setLevelIndex(prev => prev + 1);
-                else setLevelIndex(0);
+                // No-op or reused for "Win" signal if needed, but App handles the UI
             };
 
             const togglePause = () => setIsPaused(prev => !prev);
@@ -512,57 +528,87 @@
         const Board = ({ level, robot, collectedStars, paintedTiles }) => {
             const rows = level.grid.length;
             const cols = level.grid[0].length;
-            return (
-                <div className="glass-panel" style={{ position: 'relative' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, var(--grid-cell-size))`, gridTemplateRows: `repeat(${rows}, var(--grid-cell-size))`, gridGap: 'var(--grid-gap)' }}>
-                        {level.grid.map((row, y) => row.map((cell, x) => {
-                            const isStarTile = isPath(cell);
-                            const isCollected = collectedStars.includes(`${x},${y}`);
-                            const isBackground = cell === TILE_TYPES.VOID;
-                            const paintedColor = paintedTiles[`${x},${y}`];
-                            const baseColor = TILE_COLORS[cell] || TILE_COLORS[TILE_TYPES.PATH_BLUE]; // Fallback
-                            const finalColor = paintedColor || baseColor;
 
-                            return (
-                                <div key={`${x}-${y}`} className="flex-center" style={{
-                                    backgroundColor: finalColor, borderRadius: '8px',
-                                    opacity: isBackground ? 0.05 : 1,
-                                    boxShadow: !isBackground ? 'inset 0 -4px 0 rgba(0,0,0,0.2)' : 'none',
-                                    color: 'white', fontWeight: 'bold', fontSize: '1.2rem',
-                                    transition: 'background-color 0.3s ease'
-                                }}>
-                                    {isStarTile && !isCollected && !(x === level.startPos.x && y === level.startPos.y) && '★'}
-                                </div>
-                            );
-                        }))}
-                    </div>
-                    {/* ... robot container ... */}
-                    <div style={{
-                        position: 'absolute', top: '24px', left: '24px',
-                        width: 'var(--grid-cell-size)', height: 'var(--grid-cell-size)',
-                        transform: `translate(${robot.x * 68}px, ${robot.y * 68}px)`,
-                        transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                        pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
+            // Fixed Board Size Logic
+            const MAX_BOARD_SIZE = 500;
+            const GAP = 8;
+            // Calculate max available space per cell to fit in MAX_BOARD_SIZE
+            // We want the whole grid (cols * size + (cols-1)*gap) <= MAX_BOARD_SIZE
+            const cellW = (MAX_BOARD_SIZE - (cols - 1) * GAP) / cols;
+            const cellH = (MAX_BOARD_SIZE - (rows - 1) * GAP) / rows;
+            // Removed 60px limit to fill the box
+            const cellSize = Math.floor(Math.max(20, Math.min(cellW, cellH)));
+
+            return (
+                <div className="glass-panel" style={{
+                    position: 'relative',
+                    padding: '24px',
+                    width: '550px',
+                    height: '550px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}>
+                    <div style={{ position: 'relative' }}>
                         <div style={{
-                            width: '100%', height: '100%',
-                            borderRadius: '8px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transform: `rotate(${robot.dir * 90}deg)`, transition: 'transform 0.4s ease-in-out', zIndex: 10
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+                            gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
+                            gridGap: `${GAP}px`
                         }}>
-                            {/* Robot content */}
+                            {level.grid.map((row, y) => row.map((cell, x) => {
+                                const isStarTile = isPath(cell);
+                                const isCollected = collectedStars.includes(`${x},${y}`);
+                                const isBackground = cell === TILE_TYPES.VOID;
+                                const paintedColor = paintedTiles[`${x},${y}`];
+                                const baseColor = TILE_COLORS[cell] || TILE_COLORS[TILE_TYPES.PATH_BLUE]; // Fallback
+                                const finalColor = paintedColor || baseColor;
+
+                                return (
+                                    <div key={`${x}-${y}`} className="flex-center" style={{
+                                        backgroundColor: finalColor,
+                                        borderRadius: '8px',
+                                        opacity: isBackground ? 0.3 : 1, // More visible VOID
+                                        boxShadow: !isBackground
+                                            ? 'inset 0 -4px 0 rgba(0,0,0,0.2)'
+                                            : 'inset 0 0 10px rgba(0,0,0,0.1)', // Inner shadow for VOID
+                                        color: 'white', fontWeight: 'bold', fontSize: `${cellSize * 0.4}px`, // Scale font
+                                        transition: 'background-color 0.3s ease',
+                                        border: isBackground ? '2px dashed rgba(0,0,0,0.05)' : 'none'
+                                    }}>
+                                        {isStarTile && !isCollected && !(x === level.startPos.x && y === level.startPos.y) && '★'}
+                                    </div>
+                                );
+                            }))}
+                        </div>
+                        {/* ... robot container ... */}
+                        <div style={{
+                            position: 'absolute', top: 0, left: 0,
+                            width: `${cellSize}px`, height: `${cellSize}px`,
+                            transform: `translate(${robot.x * (cellSize + GAP)}px, ${robot.y * (cellSize + GAP)}px)`,
+                            transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                            pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
                             <div style={{
-                                width: '60%', height: '60%', background: 'white', borderRadius: '50%',
-                                boxShadow: '0 4px 6px rgba(0,0,0,0.2)', position: 'relative'
+                                width: '100%', height: '100%',
+                                borderRadius: '8px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transform: `rotate(${robot.dir * 90}deg)`, transition: 'transform 0.4s ease-in-out', zIndex: 10
                             }}>
+                                {/* Robot content */}
                                 <div style={{
-                                    position: 'absolute', top: '20%', left: '50%', transform: 'translate(-50%, 0)',
-                                    width: '12px', height: '12px', background: '#374151', borderRadius: '50%'
-                                }} />
+                                    width: '60%', height: '60%', background: 'white', borderRadius: '50%',
+                                    boxShadow: '0 4px 6px rgba(0,0,0,0.2)', position: 'relative'
+                                }}>
+                                    <div style={{
+                                        position: 'absolute', top: '20%', left: '50%', transform: 'translate(-50%, 0)',
+                                        width: '12px', height: '12px', background: '#374151', borderRadius: '50%'
+                                    }} />
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div >
+                </div>
             );
         };
 
@@ -866,33 +912,85 @@
             );
         };
 
-        function App() {
-            // Load from global variable defined in levels.js
-            const [levels, setLevels] = useState(window.ROBO_LEVELS || []);
 
-            if (!window.ROBO_LEVELS) {
-                return <div style={{ width: '100%', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem', fontFamily: 'sans-serif', color: 'red' }}>Error: levels.js not loaded or invalid.</div>;
-            }
+        const LevelSelector = ({ levels, onSelectLevel }) => {
+            return (
+                <div style={{ width: '100%', maxWidth: '800px', margin: '40px auto', textAlign: 'center' }}>
+                    <h1 style={{ fontSize: '3.5rem', fontWeight: '800', marginBottom: '40px', background: 'linear-gradient(135deg, #2563eb 0%, #10b981 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 4px 20px rgba(0,0,0,0.1)' }}> Robo Logic </h1>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '24px', padding: '0 16px' }}>
+                        {levels.map((level, index) => (
+                            <button key={level.id} onClick={() => onSelectLevel(index)}
+                                className="glass-panel"
+                                style={{
+                                    padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
+                                    border: '2px solid transparent', cursor: 'pointer', transition: 'all 0.3s ease',
+                                    background: 'rgba(255,255,255,0.8)'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'transparent'; }}
+                            >
+                                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>Level {index + 1}</div>
+                                <div style={{ fontSize: '1rem', color: '#4b5563' }}>{level.name}</div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
 
-            const { level, robot, programs, isPlaying, isPaused, gameStatus, execState, activeEditFunc, setActiveEditFunc, collectedStars, paintedTiles, activeCondition, setActiveCondition, addCommand, removeCommand, runProgram, resetGame, nextLevel, togglePause, speed, toggleSpeed } = useGameLogic(levels);
+        const Game = ({ level, onBack }) => {
+            // Note: robot, programs etc. are initialized per level instance
+            const { robot, programs, isPlaying, isPaused, gameStatus, execState, activeEditFunc, setActiveEditFunc, collectedStars, paintedTiles, activeCondition, setActiveCondition, addCommand, removeCommand, runProgram, resetGame, togglePause, speed, toggleSpeed } = useGameLogic(level);
+
             return (
                 <div style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+                    {/* Back Button */}
+                    <div style={{ position: 'absolute', top: 0, left: 0, zIndex: 10 }}>
+                        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'white', border: '1px solid #d1d5db', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#4b5563', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                            <span>←</span> Menu
+                        </button>
+                    </div>
+
                     <div style={{ position: 'fixed', top: '-20%', left: '-10%', width: '500px', height: '500px', background: 'radial-gradient(circle, rgba(96,165,250,0.4) 0%, rgba(0,0,0,0) 70%)', zIndex: -1 }} />
                     <div style={{ position: 'fixed', bottom: '-20%', right: '-10%', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(52,211,153,0.3) 0%, rgba(0,0,0,0) 70%)', zIndex: -1 }} />
-                    <h1 style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '2rem', background: 'linear-gradient(135deg, #2563eb 0%, #10b981 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 4px 20px rgba(0,0,0,0.1)' }}> Robo Logic </h1>
-                    <div style={{ fontSize: '1.2rem', color: 'var(--text-muted)', marginBottom: '1rem' }}> {level.name} </div>
+
+                    {/* Header */}
+                    <div style={{ textAlign: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
+                        <div style={{ fontSize: '0.9rem', fontWeight: '800', color: 'var(--primary)', letterSpacing: '1px' }}>ROBO LOGIC</div>
+                        <div style={{ fontSize: '1.5rem', color: '#1f2937', fontWeight: 'bold' }}> {level.name} </div>
+                    </div>
+
                     <Board level={level} robot={robot} collectedStars={collectedStars} paintedTiles={paintedTiles} />
                     <Controls levelConfigs={level.configs} programs={programs} execState={execState} activeEditFunc={activeEditFunc} setActiveEditFunc={setActiveEditFunc} onAddCommand={addCommand} onRemoveCommand={removeCommand} onPlay={runProgram} onReset={resetGame} isPlaying={isPlaying} isPaused={isPaused} onPause={togglePause} activeCondition={activeCondition} setActiveCondition={setActiveCondition} speed={speed} onToggleSpeed={toggleSpeed} />
+
                     {(gameStatus === 'WON' || gameStatus === 'LOST') && (
                         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
                             <div className="glass-panel" style={{ background: 'white', padding: '40px', textAlign: 'center', maxWidth: '400px' }}>
                                 <h2 style={{ fontSize: '2rem', marginBottom: '16px', color: gameStatus === 'WON' ? 'var(--secondary)' : 'var(--danger)' }}> {gameStatus === 'WON' ? 'Level Cleared!' : 'Try Again'} </h2>
                                 <p style={{ marginBottom: '24px', color: 'var(--text-muted)' }}> {gameStatus === 'WON' ? "You collected all stars!" : "The robot didn't collect all stars."} </p>
-                                <button className="btn btn-primary" onClick={gameStatus === 'WON' ? nextLevel : resetGame} style={{ width: '100%', padding: '12px' }}> {gameStatus === 'WON' ? 'Next Level' : 'Retry'} </button>
+                                <button className="btn btn-primary" onClick={gameStatus === 'WON' ? onBack : resetGame} style={{ width: '100%', padding: '12px' }}> {gameStatus === 'WON' ? 'Back to Menu' : 'Retry'} </button>
                             </div>
                         </div>
                     )}
                 </div>
+            );
+        };
+
+        function App() {
+            // Load from global variable defined in levels.js
+            const [levels, setLevels] = useState(window.ROBO_LEVELS || []);
+            const [selectedLevelIndex, setSelectedLevelIndex] = useState(null);
+
+            if (!window.ROBO_LEVELS) {
+                return <div style={{ width: '100%', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem', fontFamily: 'sans-serif', color: 'red' }}>Error: levels.js not loaded or invalid.</div>;
+            }
+
+            if (selectedLevelIndex === null) {
+                return <LevelSelector levels={levels} onSelectLevel={setSelectedLevelIndex} />;
+            }
+
+            return (
+                <Game level={levels[selectedLevelIndex]} onBack={() => setSelectedLevelIndex(null)} />
             );
         }
 
