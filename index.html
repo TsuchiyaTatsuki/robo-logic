@@ -1101,7 +1101,7 @@
             }
 
             return (
-                <Game level={levels[selectedLevelIndex]} onBack={() => setSelectedLevelIndex(null)} />
+                <Game key={levels[selectedLevelIndex].id} level={levels[selectedLevelIndex]} onBack={() => setSelectedLevelIndex(null)} />
             );
         }
 
