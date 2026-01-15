@@ -31,7 +31,7 @@
             --glass-backdrop: blur(12px);
 
             --grid-cell-size: 60px;
-            --grid-gap: 8px;
+            --grid-gap: 2px;
 
             --radius-lg: 16px;
             --radius-md: 8px;
@@ -627,7 +627,7 @@
                 };
             }, []);
 
-            const GAP = 8;
+            const GAP = 2;
             const cellW = (boardSize - (cols - 1) * GAP) / cols;
             const cellH = (boardSize - (rows - 1) * GAP) / rows;
             const baseCellSize = Math.floor(Math.min(cellW, cellH));

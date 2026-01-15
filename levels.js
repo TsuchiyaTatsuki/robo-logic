@@ -166,5 +166,21 @@ window.ROBO_LEVELS = [
             "paint": { "red": false, "blue": false, "green": false },
             "conditions": { "red": true, "blue": true, "green": true }
         }
+    },
+    {
+        "id": 9,
+        "name": "Level 9: 雲を飼う少年",
+        "grid": [
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [7, 1, 2, 3, 1, 2, 3, 1, 2, 3, 2, 1, 3, 2, 1, 7],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        ],
+        "startPos": { "x": 7, "y": 1 },
+        "startDir": 1,
+        "configs": {
+            "f0": { "limit": 5 }, "f1": null, "f2": null,
+            "paint": { "red": true, "blue": true, "green": true },
+            "conditions": { "red": true, "blue": true, "green": true }
+        }
     }
 ];
