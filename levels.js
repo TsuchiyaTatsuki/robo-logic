@@ -146,5 +146,25 @@ window.ROBO_LEVELS = [
             "paint": { "red": false, "blue": true, "green": true },
             "conditions": { "red": true, "blue": true, "green": true }
         }
+    },
+    {
+        "id": 8,
+        "name": "Level 8: ゴイゴイな彼はスーススー",
+        "grid": [
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 1, 1, 1, 1, 1, 0],
+            [0, 1, 6, 1, 6, 1, 0],
+            [0, 1, 1, 6, 1, 1, 0],
+            [0, 1, 6, 1, 6, 1, 0],
+            [0, 1, 1, 1, 1, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+        ],
+        "startPos": { "x": 3, "y": 3 },
+        "startDir": 1,
+        "configs": {
+            "f0": { "limit": 4 }, "f1": null, "f2": null,
+            "paint": { "red": false, "blue": false, "green": false },
+            "conditions": { "red": true, "blue": true, "green": true }
+        }
     }
 ];
